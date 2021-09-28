@@ -1,0 +1,51 @@
+文件配置
+q.k 文件包含operators, .Q.res返回用C语言写的operators
+s.k 文件用来使用sql （odbc）
+
+file handles
+0 STDIN - user input
+1 STDOUT - program output
+2 STDERR - errors
+-1 append a line
+1 "hello world\n"; = -1 "hello world";
+
+q k 转换
+\  q->k  (或报错时，从debugger mode返回正常模式）
+再\ k->q
+
+：assign
+对一个变量赋值可以发生在任何位置
+x*x: til 10 -> x:til 10; x*x
+
+产生随机数
+10?5 产生10个最大值为5-1的随机正整数
+10?5f 产生10个最大值为5-1的随机正浮点数
+10?0i 产生10个随机整数
+10?00:00 / 10?00:00:00 / 10?00:00:00.000 / 10?0D 产生随机的time
+10?2020.01.01 在下一个4年中产生随机的date
+10?2020.01.01T 产生最小值为2000.01.01 最大值为2020.01.01T的timestamp
+
+deal随机数
+-5？10 不放回的产生最大值为10-1的随机正整数
+rand 10 产生一个最大值为10-1的随机正整数
+rand -> k){*1?x}  (in k, * means first, | means reverse, therefore *| means last.)
+
+产生随机非数
+10?0Nc / 10?" " 产生10个字母string
+10?`2 产生10个长度为2的字母symbol
+
+用环境变量选取随机数
+.Q.a 小写字母 .Q.A 大写字母 .Q.n 数字 .Q.nA 数字+大写字母 .Q.an 小写字母+下划线+数字
+10?.Q.a 选取随机字幕10次
+
+kdb扑克牌
+deck: "23456789TJQKA" cross "DCHS"
+-7?deck 抽7张牌
+-52?deck 洗牌
+
+随机种子
+\S -> -314159i
+\S 100 -> 设置随机种子
+
+
+
