@@ -198,3 +198,34 @@ q:q,'flip `bs`as!1+count[p]?/:2#qs;
 q:`id`time`bs`bp`ap`as#q;
 q}
 q:.sim.genq[ts;qs] p
+
+simulated trades
+.sim.delay: {abs[type x]$x+next deltas[x]*count[x]?1f}
+  deltas[x]*count[x]?1f -> 产生n个随机小数,再乘以时间序列的间隔
+  next -> deltas计算当前值与上一个值的差异，而这个差异应该加到上一个时间点上
+  @[q;`time;.sim.delay]
+
+.sim.filter: {y asc (neg"j"$x*n)?n:count y}  -> save certain percent of trades
+这个可能有点问题，用？去随机会有重复值，应该用 (neg"j"$x*n)#(0N?n:count y)
+.sim.filter[.3] -1_@[;`time;.sim.delay] q
+ 
+q group q`id
+  group q`id -> lst中的唯一的值 对他们对应index的映射
+  q group q`id -> return lst of tables
+
+[1] \ts raze (.sim.filter[.3] -1_@[;`time;.sim.delay]@) each q group q`id // 44 74031584
+[2] \ts raze (.sim.filter[.3] -1_@[;`time;.sim.delay] q@) each group q`id // 40 49929152
+1式直接产生 list of table by q group q`id
+2式先产生 list of dict by group q`id, 然后把indexing的过程放到函数内，这样比较省内存
+
+.sim.trd: {[b;pct;bs;bp;ap;as](ceiling pct*?[b;bs;as];?[b;bp;ap])}
+t:q,' flip `ts`tp!.sim.trd[n?0b;(n:count q)?1f] . q`bs`bp`ap`as;
+
+
+.sim.gent:{[q] 
+ q:filter[pct] raze (-1_@[;`time;delay] q@) each group q`id;
+ t:q,' flip `ts`tp!trd[n?0b;(n:count q)?1f] . q`bs`bp`ap`as;
+ t:`id`ts`tp`time#t;
+ t}
+ t:.sim.gent[.3] q
+
