@@ -1,0 +1,200 @@
+dictionaries
+字典存储为两列，一列为keys 一列为values
+pairs:((2000.01.01;100f);(2000.01.02;101f);(2000.01.03;99f))
+d:(!) . flip pairs  ->  key 2000.01.01 ... value 100f ...
+! -> infix dyadic verb, 加了括号后，变成noun
+reverse d -> 日期反转
+2#d -> 取前两个key-value
+2000.01.01 2000.01.02#d -> 返回两个key-value
+d 2000.01.01 2000.01.02 -> 返回两个value
+(1#2000.05.02)#d -> 取1个key-value要以list的形式
+.util.rnd[0.1] d /  avg d -> rounding/average 只作用于value，忽略key
+
+单元素list
+(enlist var) ~ (), var ~ 1#var
+
+0N!, .stat`skew -> just print sth, does not run
+
+定义table的三种方式
+[1] flip 一个dict
+flip `id`date`price!(0;dt;p)
+on matrix of data -> transpose, which is expensive
+on dict of list -> just record it as a table
+[2] enlist
+enlist `id`date`price!(0;2000.01.01;100) 变成table的原因
+如果dict的key是symbol，且对应的value长度相同，那么kdb将其压缩为长度相等的向量，把lists of dict 转化为 dict of list
+[3] 直接构建
+([]id:0;date:dt;price:p)
+
+操作table 
+def: flipped dict of lists (list of dict)
+[1] reverse table
+[2] string table -> 所有的value都转化为string
+[3] value(key) flip t -> 取出所有的值 （先转为dict， 再取value）
+[4] cols t -> 取列名
+[5] `date`price#t -> select date, price from t
+[6] t `date`price -> 取列值
+[7] 2#t -2#t -> 取两行
+[8] 2#/:t -> 取两列
+[9] t[4;`price] -> 第四行的price
+[10] meta t
+
+定义/操作keyed table
+def: a dict whose key and value are tables (list of dict)
+[1] t:([id:0;date:dt]price:p)
+[2] t:2!([]id:0;date:dt;price:p) / `id`date xkey ([]id:0;date:dt;price:p)
+[3] `id`date xcols t -> 将id和date两列调到前面
+[4] 0! / () xkey -> 取消所有key
+[5] t (0;2000.01.01) / t flip (0;2000.01.01 + til 5) / t ([]id:0;date:2000.01.01 + til 5)-> 取特定id和date的price, 形式为dict
+[6] key t / value t
+[7] ([]id:0;date:dt)!([]price:p)
+
+显示所有table
+\a  /  tables`  /  \a .0  /  tables `o
+
+large tables
+[1] 100*.sim.path[;.05;dt%365.25] each 10?1f
+[2] (100?100)*\:.sim.path[.3;.05] dt%365.25
+给予股票不同的初始价格， 也可以写作 *[100?100]each .sim.path[.3;.05] dt%365.25
+*[5] 5 -> 25  *[5] 通过binding的方式把dyadic func转为 monadic func
+[3] .sim.path[.3;.05;dt%365.25]*/:100?100
+[4] 100*.sim.path[;;dt%365.25]'[100?.1;100?.1]
+对两个parameter进行each-both选取，其中参数的数量可以+  -> {x+y+z}[;;]'[til 5; 5+ til 5;10+til 5]  -> 15 18 21 24 27
+也可以写成 100*(100?.1) .sim.path[;;dt%365.25]' 100?.1
+
+.sim.genp:{[id;S;s;r;dtm] 
+              t:abs type dtm; 
+              tm:("np" t in 12 14 15h)$dtm; 
+              p:S*.sim.path[s;r;tm%365D06]; 
+              c:`id,`time`date[t=14h],`price;
+              p:flip c!(id;dtm;p);
+              p}
+type 12 timestamp, 14 date, 15 datetime/ "n" timespan "p" timestamp
+tm:("np" t in 12 14 15h)$dtm;  -> tm: ?[t in 12 14 15h;"p"$dtm;"n"$dtm]
+c:`time`date[t=14h] -> c:?[t=14h;`date;`time]
+交易用法："S B"1+signum 10 0 -10 -> "B S"
+
+查找算法
+小列表 -> linear search
+sorted data -> binary search
+unique, grouped or partitioned data -> hashing （more memory）
+因此有4种attributes -> sorted, unique, parted, grouped
+`s#x 设置attr
+attr x 获取attr
+`#x 移除attr
+1 2 4 5 bin 3  -> 二分法返回不大于3的index  1
+1 2 4 5 binr 3 -> 二分法返回大于3的index 2
+
+\t:100 \ts:100 跑100次所需的时间
+
+unique -> map the results to a single index (for single col key)
+没有unique attr时，由于是linear search，字典后面的row比前面查找的时间更长
+有 unique attr时，变成哈希算法，查找时间恒定
+t[`date]: `u#t`date  (t`date ~ @[t;`date]
+@[t;`date;`u#] -> update `u#date from t
+@[`t;`date;`u#] -> t:@[t;`date;`u#]
+@[`t;`date;`#] -> t: update `#date from t
+@[t;`price;%;100] -> update price%100 from t
+unique 实测
+dts:.util.rng[1;2000.01.01;2005.01.01]
+t:.sim.genp[0;100;.3;.03;dts]
+(count t) ~ count select distinct date from t
+\t:10000 select from t where date = 2004.12.31 // 33
+@[`t;`date;`u#]
+\t:10000 select from t where date = 2004.12.31 // 5
+
+parted -> map results to a row index (for multi keys)
+允许重复值，但是相同值的所有实例必须一起partitioned（clustered）
+parted 实测
+n:1000;dts:.util.rng[1;2000.01.01;2010.01.01];
+t:raze .sim.genp[;;;;dts]'[til n;n?100;n?.3;n?.03];
+t:{x xcols @[;x;`p#] x xasc y}[`date] t;
+\t:100 select from t where date = 2009.12.31, id = 999 // 600
+t:{x xcols @[;x;`p#] x xasc y}[`date] t;
+\t:100 select from t where date = 2009.12.31, id = 999 // 0
+
+grouped -> map distinct hash value to a list of row indices 
+在table一直更新新row的时候使用
+grouped 实测
+\t:100 select from t where date = 2009.12.31, id = 999 // 600
+@[`t;`date;`g#]
+\t:100 select from t where date = 2009.12.31, id = 999 // 0
+
+speed: 先找第一个keyed的col，找到之后，在这个范围内对于剩下的cols用线性搜索，所以第一个key最好相对unique，`p比`g更好
+也可以给多个key设置属性 -> @[t;`id`date;{y#x};`p`g]
+
+自动设置attr
+.util.sattr:{[t] 
+c:first cols t;
+a:`g`u 1=n:count keys t;
+t:n!@[;c;a#]0!t;
+t}
+a:`g`u 1=n:count keys t; -> a:?[1=count keys t;`u;`g]
+t:n!@[;c;a#]0!t; -> remove the key, then re-key
+
+对dict进行sort
+.util.kasc:{$[`s=attr k:key x;x;(`s#k i)!value[x]i:iasc k]}
+如果已经sort则原样返回
+如果没有sort，用iasc对key进行sort，用value[x]取出值，进行sort，再用sort之后的key进行key
+
+simulated prices
+.util.randrng:{[n;s;e]s+n?e-s}
+产生n个介于s和e之间的时间
+对多个产生的时间序列分别排序
+[1] asc each .util.randrng[;0D09;0D16] each n#1000
+[2] {asc .util.randrng[x;0D09;0D16]} each n#1000
+[3] (asc .util.randrng[;0D09;0D16]@) each n#1000
+util.randrng[;0D09;0D16] -> monadic
+@ -> can take more than one arg
+.util.randrng[;0D09;0D16]@ -> a acomposition that combine two functions to create a third one, which expects a single arg
+myadd:{x+y};
+{myadd[1;x]} each til 5
+(myadd[1;]@) each til 5
+or
+{{2*x}[x] } each til 5
+({2*x}@) each til 5
+
+simulated quotes
+k:0n 5 10 25 50 100 
+v:.01 .05 .1 .25 .5 1
+sf:`s#k!v  (sf:`s#([k]v))
+字典的key和字典本身都是sorted，这样找index时进行binary search，并返回key对应的值
+dictionary indexing
+di:{value[x] key[x] ? y}
+di[sf] 5 7 25 99 101f -> 0.05 0n 0.25 0n 0n
+step function indexing
+sfi:{value[x] key[x] bin y}
+sfi[sf] 5 7 25 99 101f -> 0.05 0.05 0.25 0.5 1
+sf 5 7 25 99 101f -> 0.05 0.05 0.25 0.5 1
+
+.sim.tickrnd:{if[99h=type x;x@:y];(y;x+y:x*floor y%x)}
+type 99h -> dict
+dict@key ~ dict[key]
+x@:y -> x: x[y]
+
+ts:`s#0n 5 50 100!.001 .005 .01 .02;
+tms:(asc .util.randrng[;0D09;0D16]@) each n#1000;
+p:raze .sim.genp'[til n;n?100;n?.3;n?.03;tms];
+flip `bp`ap!.sim.tickrnd[ts] p `price;
+bp ap -> bid ask
+
+fancy way to update new cols (mavg)
+[1] mavg prices
+tms:asc .util.randrng[n;0D09;0D16]
+p:(n?100)*(n?1f).sim.path[;;tms%365D06]' n?.1 
+p:ungroup ([]id:til n;time:n#enlist tms;price:p)
+w:5 10 20 
+p,'flip (`$"w",/:string w)!w mavg\:p `price
+(`$"w",/:string w) -> `w5`w10`w20
+w mavg\:p `price -> 5/10/20 mavg price
+p,'newp -> add new cols
+[2] quote size
+qs:100
+p,'flip `bs`as!1+count[p]?/:2#qs
+
+.sim.genq:{[ts;qs;p] 
+q:p,'flip `bp`ap!tickrnd[ts] p `price;
+q:q,'flip `bs`as!1+count[p]?/:2#qs;
+q:`id`time`bs`bp`ap`as#q;
+q}
+q:.sim.genq[ts;qs] p
