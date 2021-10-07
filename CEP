@@ -1,0 +1,219 @@
+CEP engine是一个长期运行的q process，对时间做出反应
+
+timer
+\t 1000 -> 1000毫秒
+.z.ts:{0N!x} -> 开始每隔一秒打印当前时间（在cmd里显示）
+\t 0 -> 退出打印
+
+timer.job: ([]name:`symbol$();func:();time:`timestamp$())
+timer.job:flip `name`func`time!"s*p"$\:()
+
+timer.job upsert (`;();.z.P)
+  添加空列来防止untyped cols坍塌
+`timer.job upsert (`;();0Wp)  -> `timer.job set timer.job upsert (`;();0Wp)
+  timer里面的元素是被时间倒序排列的，为了防止最上面的那行不被跑到，加一个不会跑到的时间 0Wp
+  
+0N 0W -0W -> Nan, +inf, -inf  0N最小，-0W比0N大1，0W最大
+0W + 3 2 1 0 -1 -> -9223372036854775806 -0W 0N 0W 9223372036854775806
+0Wi + 3 2 1 0 -1i -> -2147483646 -0W 0N 0W 2147483646i
+null 01b -> 00b   bool 和 byte 没有null
+0 1 ^ (1 2 0N;3 0N 5) -> (1 2 0;3 1 5)
+
+timer的四个功能
+speed: 从列表的尾端添加元素最有效率，为了避免内存分配，最好删除的时候也从尾端删除
+为了保证我们一直操作timer.job尾端的数据，在添加新的元素后我们把时间按照倒序排列
+如果都是以添加的时间作为运行时间，那么新添加的job在第二行（第一行为默认不会被运行的job）
+[1] .timer.merge: `time xdesc upsert
+-> 添加新的timer事件，之后按照时间倒序排列
+[2] .timer.add:{[t;n;f;tm] 
+ r: (n;f;gtime tm); // run function(f) on event name(n) on time tm(gtime tm)
+ t: .timer.merge[t;$[0h>type tm;r;reverse flip r]];  // type nh>0 -> lists. type nh<0 -> single element
+ t}
+-> 接受表名t，时间名n，函数f，和运行函数的时间tm
+   timer运行的时间是GMT时间，gtime -> convert local time to GMT, ltime -> convert GMT to local time
+.timer.add[`timer.job;`a;`.q.show;.z.P+0D00:00:05* til 10]
+error: show does not work, use .q.show
+speed: 用table name传参直接修改global变量，因为不用复制数据结构，而是in-place地修改，效率更高
+[3] .timer.loop: {[t;tm] while[tm>=last tms:t`time; t:.timer.run[t;-1+count tms; tm]]; t}
+-> 查看最后一个job（最新添加的job）跑没跑，如果这个job应该跑的时间在现在之前，那么就跑，否则就返回没跑的table
+[4] .timer.run:{[t;i;tm] 
+j:t i; 
+t:.[t;();_;i]; 
+r:value (f:j`func),ltime tm; 
+if[not null r;.timer.merge[t;(j`name;f;tm+r)]]; 
+t}
+-> 接收表名t, 列数i，时间tm
+j:t i -> 表名t可以是table，也可以是table name
+.[t;();_;i] -> 丢掉第i行
+upsert定义 -> .[;();,;]，把，（添加）换为_（丢弃），即是drop
+.q.drop: .[;();_;]    
+运行方式为 timer.job drop 1  ->  返回drop之后的table
+r:value (f:j`func),ltime tm  -> 函数对localtime的运行
+if[not null r;merge[t;(j`name;f;tm+r)]] -> 如果返回不是null，就再跑一遍（？）
+
+.timer.until:{[d;et;f;tm]if[tm<et;@[value;f,tm;0N!];:d]}
+-> 接收延时d， 结束时间et，函数f，现在时间tm
+@[value;f,tm;0N!] 
+-> @ and . take a function, an args list, and a function to process errors or return an alternate result
+\t 100
+e:(`.timer.until;0D00:00:01;.z.P+0D00:00:30;`.q.show)
+.timer.add[`timer.job;`a;e;.z.P]
+
+Logging
+.Q.w[]
+used	506767600  
+heap	1476395008
+peak	1476395008
+wmax	0
+mmap	153883645702
+mphy	270408531968
+syms	1013058
+symw	63683581
+used 已用内存
+heap 每当内存不够时，kdb就新加一个64m的内存块， heap表示已经添加的内存。 如果无法继续添加内存，就报错'wsfull
+peak 高水位法的heap，不用的内存块会被释放，heap会减少，peak不会
+wmax 最高分配内存，是mphy（物理内存）的两倍
+mmap 从硬盘中映射的内存
+
+logging library
+h:-2;
+lvl:2;
+unit:"BKMGTP";
+mult:5 (1024*)\ 1;
+
+h:-2   
+STDERR(-2), 可以改为-1(STDOUT)
+We could, in fact, redirect the messages to a file or network socket if we set .log.h to the handle returned from the hopen operator.
+lvl:2  
+log level, 2-> error, warning and info
+-1 -> 没有log， 0 -> 只显示errors， 1 -> 显示warnings
+unit:"BKMGTP" 
+mult:5 (1024*)\ 1  -> 怎么用scan
+
+让内存看得懂
+.log.mem:{@[string"i"$(3#x)%mult m;2;,;unit m:mult bin x 2]}
+.log.mem system "w" -> ("0";"64";"64M")  used/allocated/max used
+.util.hdr:{string[(.z.D;.z.T)],.log.mem system "w"}
+.log.msg:{if[x<=lvl;h " " sv .util.hdr[],(y;$[10h=type z;z;-3!z])]}
+
+
+.log.err:.log.msg[0;"[E]"] 
+.log.wrn:.log.msg[1;"[W]"] 
+.log.inf:.log.msg[2;"[I]"] 
+.log.dbg:.log.msg[3;"[D]"] 
+.log.trc:.log.msg[4;"[T]"]
+  
+.log.inf "on start
+return -> 2021.10.07 03:03:31.151 0 64 64M [I] on start
+
+command line options
+.opt.config:1#flip `opt`def`doc!"s**"$\:()
+
+c:.opt.config 
+c,:(`ref;`:ref.csv;"file with reference data") 
+c,:(`eod;0D23:59;"time for end of day event") 
+c,:(`db;`:db;"directory to save tables at eod") 
+c,:(`debug;0b;"don't start engine") 
+c,:(`log;2;"log level")
+
+.q.getopt:{[c;h;x] 
+p:(!). c `opt`def; 
+p:.Q.def[p] .Q.opt x; 
+p:@[p;h;hsym]; 
+p}
+
+ p:(!). c`opt`def
+ @[p;`ref`db;hsym]
+ 
+ .opt.usage:{[c;f] 
+ u:enlist "usage: q ",(string f)," [option]..."; 
+ a:wrap[(7#" "),"-";" "] string c`opt; 
+ a:a,'wrap["<";"> "] c`doc; 
+ a:a,'wrap["(";")"] -3!'c`def; 
+ u,:a; 
+ u}
+ 
+ 8$"qtips" -> "qtips   "
+-8$"qtips" -> "   qtips"
+
+Running a CEP engine
+
+产生数据表
+ref:.util.sattr 1!flip `id`px`ts`qs`vol`rfr!"jffjff"$\:();
+prices:.util.sattr flip `id`px`time!"jfp"$\:();
+price:.util.sattr 1!prices; 
+trades:.util.sattr flip `id`ts`tp`time!"jjfp"$\:(); 
+trade:.util.sattr 1!trades; 
+quotes:.util.sattr flip `id`bs`bp`ap`as`time!"jjffjp"$\:(); 
+quote:.util.sattr 1!quotes;
+id - symbol, px - initial price, ts - tick spread, qs - max quote size, vol - volatility, rfr - risk free rate
+
+更新价格
+从price表获取最新价，用.stat.gbm.函数和ref表里的vol和rfr产生价格
+.md.updp:{[id;tm] 
+.log.dbg "updating price for ", string id; 
+p:`price id; r:`ref id; 
+z:.stat.norminv rand 1f; 
+f:.stat.gbm[r `vol;r `rfr;(tm-p `time)%365D06;z]; 
+p:`id`px`time!(id;f*p `px;tm); 
+`price`prices upsert\: p;
+}
+
+generic null ::
+null (::)  /  (::) ~ {}[] -> 1b, 用括号括起来，防止被认为是两个赋值
+
+更新报价
+用最新价来产生bid 和 ask
+.md.updq:{[id;tm] .log.dbg "updating quote for ", string id; 
+px:`price[id;`px]; r:`ref id; 
+q:`id`time!(id;tm); 
+q,:`bp`ap!.sim.tickrnd[r `ts] px; 
+q,:`bs`as!1+2?r `qs; 
+`quote`quotes upsert\: q;
+}
+
+更新交易
+根据bid 和 ask产生成交价和成交量
+.md.updt:{[id;tm] 
+if[not id in key `quote;:(::)]; 
+.log.dbg "updating trade for ", string id; 
+q:`quote id; 
+t:`id`time!(id;tm); 
+t,:`ts`tp!.sim.trd[rand 0b;rand 1f] . q `bs`bp`ap`as; 
+`trade`trades upsert\: t;
+}
+
+保存数据
+.md.dump:{[db;tm] 
+dt:"d"$tm; 
+.log.inf "dumping tables in ", 1_ string ` sv db,`$string dt; 
+0!/:`price`quote`trade; 
+.Q.dpft[db;dt;`id] each `price`quote`trade`prices`quotes`trades; 
+1!/:`price`quote`trade;
+}
+.Q.dpft -> directory, partition, sort field and table name -> 用来产生数据结构
+
+.Q.id -> 修正col的名字
+.Q.id enlist (`$"pct%";`div)!"ff"$\:() -> pct div1
+
+.util.mapcol: {[d;t](c^d c:cols t) xcol t} -> 改col的名字
+
+main:{[p;tm] 
+r:("J FFJFF";1#",") 0: 
+p`ref; `ref upsert `id`px`ts`qs`vol`rfr xcol r; 
+`price upsert flip ((0!ref)`id`px),tm; 
+tms:(n:count ids:key[ref]`id)#tm; 
+u:genu[p`eod;ids]; 
+.timer.add[`timer.job;`updp;u[d:n?0D00:00:01;`.md.updp];tms]; 
+.timer.add[`timer.job;`updq;u[d+:n?0D00:00:01;`.md.updq];tms]; 
+.timer.add[`timer.job;`updt;u[d+:n?0D00:00:01;`.md.updt];tms]; 
+.timer.add[`timer.job;`dump;(`.md.dump;p`db);p[`eod]+"d"$tm]; 
+}
+
+genu:{[et;ids;d;f]flip(`.timer.until;d;et;flip(f;ids))}
+genu[0D23:59;0 1;1 2+00:01;`.md.updp]
+u:genu[p`eod;ids];
+.timer.add[`timer.job;`updp;u[d:n?0D00:00:01;`.md.updp];tms]; 
+.timer.add[`timer.job;`updq;u[d+:n?0D00:00:01;`.md.updq];tms]; 
+.timer.add[`timer.job;`updt;u[d+:n?0D00:00:01;`.md.updt];tms];
+.timer.add[`timer.job;`dump;(`.md.dump;p`db);p[`eod]+"d"$tm];
