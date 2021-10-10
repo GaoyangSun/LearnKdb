@@ -1,0 +1,55 @@
+Security
+h:hopen`:../psswd.txt
+neg[h] 0N!"gaoyang:", raze string md5 "qtips"
+hclose h
+用户名 gaoyang 密码 qtips
+在psswd.txt里面显示 -> gaoynag:72fcf42466c7b4e7ae7ad6e25bbf3ae9
+neg[h] "[txt]"-> 让[txt]在文件的尾部最后一行显示 
+h "[txt]" -> 则在最后显示12345（不换行）
+0N! -> 只有显示作用，不是必须
+重新开启端口 q -u ../psswd.txt -p 5001
+跨端口连接时 [server]:[port][:user[:password]]
+
+例如在f:/data/qtest下开启5002端口后
+h: hopen `:../q5002.txt
+neg[h] "gaoyang:", raze string md5 "qtips"
+neg[h] "xiaoma:", raze string md5 "qtips"
+hclose h
+重新在f:/data/qtest开启5002： q -u ../q5002.txt -p 5002
+然后在5001下连接5002
+h2: hopen`::5002:xiaoma:qtips 则可以连接
+h2: hopen`::5002 -> 'access
+hopen (`::5001:nick:qtips;100) -> 设置100ms的timeout(?)
+-u 限制更改q5002.txt的权限仅为5002端口下
+-U 则没有这种限制
+
+限制特定用户
+5002下 .z.pw:{[u;p] not `gaoyang=u}
+5001下 h2: hopen`::5002:gaoyang:qtips -> 'access
+
+.z.u -> `Admin 用户名
+"h"$0x0 vs .z.a ->  172 17 123 113h  网络地址
+.z.w -> 0i who
+
+handle:.util.sattr 1!flip `h`active`user`host`address`time!"ibss*p"$\:()
+端口开启
+.z.po:{[h]`handle upsert (h;1b;.z.u;.Q.host .z.a;"i"$0x0 vs .z.a;.z.P);} 
+.z.po 0i  
+handlle -> 0	true	admin	gaoyang	127 0 0 1i	2021-10-09T13:39:50.310712
+端口关闭
+.z.pc:{[h]`handle upsert `handle`active`time!(h;0b;.z.P);}
+hclose hopen `::5002
+4 | 0 nick nicks-macbook 127 0 0 1 2015.03.06D13:45:26.561484000
+
+.log.hdr:{string[(.z.D;.z.T;.z.u;.z.w;.Q.host .z.a)],mem get"\\w"}
+
+Debugging
+在cmd里
+q) -> 正常
+q)) -> dubug mode
+q) f:{break;x+y}
+q) f[1;2]
+'break
+q)) x -> 1
+q)) y -> 2
+
