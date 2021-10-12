@@ -10,6 +10,15 @@ d 2000.01.01 2000.01.02 -> 返回两个value
 (1#2000.05.02)#d -> 取1个key-value要以list的形式
 .util.rnd[0.1] d /  avg d -> rounding/average 只作用于value，忽略key
 
+字典内计算 
+sum (1635 1634)!700 -700 -> sum (1635 1635)!700 -700 -> 0
+字典间计算
+(`a`b`c!1 2 3) + (`b`c`d)!20 30 40 -> (`a`b`c`d)!1 22 33 40
+(`a`b`c!1 2 3) - (`b`c`d)!20 30 40 -> (`a`b`c`d)!1 -18 -27 -40
+((enlist 1635)!enlist 700) + (enlist 1634)!enlist -700 -> (1635 1634)!(700 -700)
+((enlist 1635)!enlist 700) + (enlist 1635)!enlist -700 -> (enlist 1635)!enlist 0
+(`a`b`c!1 2 3), (`b`c`d)!20 30 40 -> (`a`b`c`d)!1 20 30 40 / kdb从右往左，right prevails right
+
 单元素list
 (enlist var) ~ (), var ~ 1#var
 
