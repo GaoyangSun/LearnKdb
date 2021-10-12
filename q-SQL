@@ -1,0 +1,17 @@
+Select
+从一个table select几列时，不会对表进行复制。由于列是相邻的内存块，可以passed by reference
+Where 从句从左往右读取，右边的条件在左边条件筛选剩下的列里面去选取，因此最严格的条件应该放在最左边
+（，）和（and/or）的区别在于，and会把两个条件分别做筛选，然后取交集/并集
+可以用venn图来将（or）转化为（，）
+not(A or B) -> not(A), not(B),  (A or B) -> not(not(A), not(B))
+
+select from t where (id=1) or date.month=2000.02m
+-> delete from t where not id=1, not date.month=2000.02m
+
+t: select date, symbol, close from stkDailyTrade1 where date.month = 2017.01m
+"," 0: select close by symbol,date from t -> type error, because each price col is a list, not an atom
+
+Exec 
+select is a special form of exec, 
+select only return tables, exec can return atom, list, dict or table
+
