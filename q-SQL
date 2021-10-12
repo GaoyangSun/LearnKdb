@@ -12,6 +12,18 @@ t: select date, symbol, close from stkDailyTrade1 where date.month = 2017.01m
 "," 0: select close by symbol,date from t -> type error, because each price col is a list, not an atom
 
 Exec 
-select is a special form of exec, 
+select is a special form of exec,  -> (select symbol, date, close from t) ~ flip exec symbol,date,close from t
 select only return tables, exec can return atom, list, dict or table
+atom -> exec first close from t
+list -> exec close from t
+dict 
+(exec symbol,date,close from t)`symbol
+(exec px:close from t)`px
+(exec last close by date from t where symbol = `000001)[2017.01.03]
+(exec px: last close by symbol, date from t where symbol = `000001)[(`000001;2017.01.03)]
+(exec close by date:date from t where symbol = `000001)[select date from t where symbol = `000001]
+(exec close:close by date from t where symbol = `000001)[2017.01.03]
 
+Exec by
+(exec first ([] date; close) by symbol:symbol from t) ~ exec first date, first close by symbol:symbol from t
+calling first on the table creates a dictionary. The by clause causes one dictionary to be created for each id, and the resulting list of dictionaries is then promoted to a table.
